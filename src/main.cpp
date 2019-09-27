@@ -1,5 +1,5 @@
 #include <lsmt.hpp>
 
 int main() {
-    hello_world();
+    std::cout << "Hello world!" << std::endl;
 }

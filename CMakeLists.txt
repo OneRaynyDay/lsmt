@@ -20,3 +20,4 @@ target_include_directories(lsmt
 # Add compile options
 target_compile_options(lsmt PRIVATE -Werror)
 target_compile_features(lsmt PRIVATE cxx_std_17)
+set(CMAKE_CXX_COMPILER g++-9)
