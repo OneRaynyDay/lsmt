@@ -71,12 +71,16 @@ class lsmtree {
     using map_t = cuckoohash_map<K,V>;
 
 public:
+    // Construction & Destruction
+    // --------------------------
+    // So far, this class follows rule of 1 (only ctor). We assume map_t is well defined
+    // under default operations of lsmt.
+
     // For an LSM Tree, we want:
     // sstables - Metadata required for tiers of sstables
     // tombstone - Special data of type V that users are not allowed to use as inserts (responsibility to user),
     //             and is denoted as a deleted record.
     lsmtree(const std::array<sstable_metadata, lsmtree_levels>& sstables, const V& tombstone) {
-
     }
 
     // Getters
