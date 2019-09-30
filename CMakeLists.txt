@@ -23,11 +23,17 @@ target_compile_features(Lsmt INTERFACE cxx_std_17)
 set(CATCH_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include/catch2)
 add_library(Catch INTERFACE)
 target_include_directories(Catch INTERFACE ${CATCH_INCLUDE_DIR})
+
+# Single-threaded tests
 add_executable(test_lsmt test/test_lsmt.cpp)
 target_link_libraries(test_lsmt Catch Lsmt)
 
+# Multi-threaded tests
+add_executable(test_lsmt_multithread test/test_lsmt_multithread.cpp)
+target_link_libraries(test_lsmt_multithread Catch Lsmt)
+
 enable_testing()
-add_test(CatchTests test_lsmt)
+add_test(CatchTests test_lsmt test_lsmt_multithread)
 
 
 # EXECUTABLE MAIN

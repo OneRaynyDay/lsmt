@@ -6,6 +6,7 @@
 #include <shared_mutex>
 #include <iostream>
 #include <filesystem>
+#include <type_traits>
 
 namespace lsmt{
 
@@ -64,6 +65,9 @@ static constexpr std::size_t MAX_MEM = 1000000; // In-memory data structure will
 
 template <typename K, typename V, std::size_t lsmtree_levels>
 class lsmtree {
+    // V must be copy constructible (from a tombstone)
+    static_assert(std::is_copy_constructible<V>::value, "Value type must be copy constructible");
+
     // This is a rough estimate of how much
     static constexpr std::size_t MAX_ENTRIES = MAX_MEM / (sizeof(K) + sizeof(V));
 
@@ -80,14 +84,17 @@ public:
     // sstables - Metadata required for tiers of sstables
     // tombstone - Special data of type V that users are not allowed to use as inserts (responsibility to user),
     //             and is denoted as a deleted record.
-    lsmtree(const std::array<sstable_metadata, lsmtree_levels>& sstables, const V& tombstone) {
-    }
+    // TODO: Take care of sstables
+    lsmtree(const std::array<sstable_metadata, lsmtree_levels>& sstables, const V& tombstone) : _tombstone(tombstone) {}
 
     // Getters
     // -------
-
     const int size() {
         return _map.size();
+    }
+
+    constexpr std::size_t max_entries() {
+        return MAX_ENTRIES;
     }
 
     // Returns true if there are too many elements inside the in-memory data structure and it needs to be flushed to disk.
@@ -95,10 +102,28 @@ public:
         return size() >= MAX_ENTRIES;
     }
     
-    // We want to insert into an LSM Tree.
-    // To insert, simply add into the in-memory container for most cases. This means doing a write-lock.
-    // TODO
-    void insert(const K& key, const V& value) {
+    // We want to read from an LSM Tree.
+    // To read, we have to do a read-lock, and check to see if the data exists. If not, then we need to
+    // scan subsequent SSTables until we find the entry.
+    //
+    // If find(k) does not find the value, it will return the tombstone. This is a special value and the user needs to
+    // be responsible for it.
+    V find(const K& key) const {
+         V val(_tombstone);
+         // TODO: Go into SSTables and look as well.
+         _map.find(key, val);
+         return val;
+    }
+
+    // Setters
+    // -------
+
+    // We want to insert or update an existing value in LSM tree.
+    // To insert, simply add into the in-memory concurrent container for most cases. This means doing a write-lock.
+    //
+    // NOTE: We don't want to return true if key exists/false otherwise because to check whether
+    //       key exists would require probing into SSTables which is expensive.
+    void upsert(const K& key, const V& value) {
         // If map is full, then we need to lock all inserts until the result is written to disk.
         {
             // Note: The reason we don't use for example cuckoo hashmap's lock_tbl() directly is
@@ -111,25 +136,26 @@ public:
                 _map.clear();
             }
         }
-
+         
         // Insert into map (which may be cleared just now)
-        _map.insert(key, value);
+        _map.insert_or_assign(key, value);
     }
 
     // We want to delete from an LSM Tree.
     // To delete, we actually apply an insert but with a tombstone, so essentially calling the above insert with tombstone.
-    // TODO
+    void remove(const K& key) {
+        upsert(key, _tombstone);
+    }
 
-    // We want to read from an LSM Tree.
-    // To read, we have to do a read-lock, and check to see if the data exists. If not, then we need to
-    // scan subsequent SSTables until we find the entry.
-    // TODO
 private:
     // In-memory data structure that is append & update-only.
     map_t _map;
 
     // Lock for writes when the map is full.
     lock _lock;
+
+    // Special tombstone 
+    const V& _tombstone;
 };
 
 } // namespace lsmt
